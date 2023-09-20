@@ -1,0 +1,8 @@
+checkpoints/
+wandb/
+*/__pycache__
+
+data/MultiWOZ_2.2_instruction/
+data/MultiWOZ_2.2_raw/
+
+scripts/wandb_config.sh
