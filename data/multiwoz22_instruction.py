@@ -1,4 +1,7 @@
 from datasets import load_dataset
+import numpy as np
+import pandas as pd
+from datasets import Dataset
 import json
 
 def process_data(example):
@@ -39,7 +42,7 @@ def process_data(example):
                     ret["domain"].append(domain)
 
                     ret["slot_name"].append(slot["name"])
-                    ret["slot_value"].append(["NONE"] if slot["name"] not in active_slots.keys() else active_slots[slot["name"]])
+                    ret["slot_value"].append(["None"] if slot["name"] not in active_slots.keys() else active_slots[slot["name"]])
                     
         else:
             current_context.append("[ASSISTANT]: "+utter)
@@ -59,7 +62,7 @@ def convert_to_instruction_following_prompts(examples):
             slot_desc = slot2desc[slot_name]
             slot_space = slot2space.get(slot_name, None)
             if slot_space is not None:
-                slot_space = "[" + ", ".join(slot_space+["NONE"]) + "]"
+                slot_space = "[" + ", ".join(slot_space+["None"]) + "]"
 
             instructions.append(template_categorical.format(slot_desc=slot_desc, slot_space=slot_space) if slot_space is not None else template_non_categorical.format(slot_desc=slot_desc))
             inputs.append(examples["context"][i])
@@ -89,6 +92,23 @@ if __name__ == "__main__":
 
     processed_ds = ds.map(process_data, batched=True, batch_size=1, remove_columns=ds["train"].column_names, num_proc=8)
     instruction_ds = processed_ds.map(convert_to_instruction_following_prompts, batched=True, batch_size=100, remove_columns=processed_ds["train"].column_names, num_proc=8)
+
+    # NOTE I only know how to do this in pandas. Gotta move fast so I didn't bother using huggingface dataset
+    initial_size = len(instruction_ds["train"])
+    temp_train_df = instruction_ds["train"].to_pandas()
+
+    condition = (temp_train_df["output"] == "None")
+    # Percentage to drop is (pct_of_none - pct_of_not_none) = 2 * pct_of_none - 1
+    pct_to_drop = 2 * condition.sum() / len(temp_train_df) - 1
+    print("INFO: dropping {:.2f} of None values".format(pct_to_drop.item()))
+    num_rows_to_drop = int(initial_size * pct_to_drop)
+    indices_to_drop = temp_train_df.index[condition]
+    # Randomly select the indices to drop
+    indices_to_drop = np.random.choice(indices_to_drop, num_rows_to_drop, replace=False)
+    # Drop the selected rows from the DataFrame
+    df_filtered = temp_train_df.drop(indices_to_drop)
+    instruction_ds["train"] = Dataset.from_pandas(df_filtered, preserve_index=False)
+    print(f"INFO: Train dataset size shrinked from {initial_size} rows to {len(instruction_ds['train'])}. {initial_size - len(instruction_ds['train'])} None values removed.")
 
     print(instruction_ds)
     print("\n\n")
