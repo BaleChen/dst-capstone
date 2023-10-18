@@ -48,7 +48,7 @@ def process_data(example):
             current_context.append("[ASSISTANT]: "+utter)
     return ret
 
-def convert_to_instruction_following_prompts(examples):
+def convert_to_instruction_following_prompts_train(examples):
     
     template_non_categorical = """Based on the input dialogue between the user and the assistant, answer \"{slot_desc}\". If it\'s not mentioned in the dialogue, please answer NONE. """
     template_categorical = """Based on the input dialogue between the user and the assistant, choose the correct answer for \"{slot_desc}\" from {slot_space}. If it\'s not mentioned in the dialogue, please choose NONE. """
@@ -63,7 +63,6 @@ def convert_to_instruction_following_prompts(examples):
             slot_space = slot2space.get(slot_name, None)
             if slot_space is not None:
                 slot_space = "[" + ", ".join(slot_space+["None"]) + "]"
-
             instructions.append(template_categorical.format(slot_desc=slot_desc, slot_space=slot_space) if slot_space is not None else template_non_categorical.format(slot_desc=slot_desc))
             inputs.append(examples["context"][i])
             outputs.append(slot_value)
@@ -72,6 +71,36 @@ def convert_to_instruction_following_prompts(examples):
         "instruction": instructions,
         "input": inputs,
         "output": outputs,
+    }
+
+def convert_to_instruction_following_prompts_eval(examples):
+    
+    template_non_categorical = """Based on the input dialogue between the user and the assistant, answer \"{slot_desc}\". If it\'s not mentioned in the dialogue, please answer NONE. """
+    template_categorical = """Based on the input dialogue between the user and the assistant, choose the correct answer for \"{slot_desc}\" from {slot_space}. If it\'s not mentioned in the dialogue, please choose NONE. """
+    dialogue_turn_id = []
+    instructions = []
+    slots = []
+    inputs = []
+    outputs = []
+    for i in range(len(examples["slot_name"])):
+        slot_name = examples["slot_name"][i]
+        slot_values = examples["slot_value"][i]
+        slot_desc = slot2desc[slot_name]
+        slot_space = slot2space.get(slot_name, None)
+        if slot_space is not None:
+            slot_space = "[" + ", ".join(slot_space+["None"]) + "]"
+        dialogue_turn_id.append(examples["dialogue_id"][i][0][:-5] + "-" + str(examples["turn_id"][i]))
+        instructions.append(template_categorical.format(slot_desc=slot_desc, slot_space=slot_space) if slot_space is not None else template_non_categorical.format(slot_desc=slot_desc))
+        inputs.append(examples["context"][i])
+        outputs.append(slot_values)
+        slots.append(slot_name)
+
+    return {
+        "dialogue_turn_id": dialogue_turn_id,
+        "instruction": instructions,
+        "input": inputs,
+        "output": outputs,
+        "slot_name": slots,
     }
 
 
@@ -91,11 +120,11 @@ if __name__ == "__main__":
             slot2space[slot["name"]] = slot["possible_values"] if slot["is_categorical"] else None
 
     processed_ds = ds.map(process_data, batched=True, batch_size=1, remove_columns=ds["train"].column_names, num_proc=8)
-    instruction_ds = processed_ds.map(convert_to_instruction_following_prompts, batched=True, batch_size=100, remove_columns=processed_ds["train"].column_names, num_proc=8)
+    instruction_train = processed_ds["train"].map(convert_to_instruction_following_prompts_train, batched=True, batch_size=100, remove_columns=processed_ds["train"].column_names, num_proc=8)
 
     # NOTE I only know how to do this in pandas. Gotta move fast so I didn't bother using huggingface dataset
-    initial_size = len(instruction_ds["train"])
-    temp_train_df = instruction_ds["train"].to_pandas()
+    initial_size = len(instruction_train)
+    temp_train_df = instruction_train.to_pandas()
 
     condition = (temp_train_df["output"] == "None")
     # Percentage to drop is (pct_of_none - pct_of_not_none) = 2 * pct_of_none - 1
@@ -107,17 +136,26 @@ if __name__ == "__main__":
     indices_to_drop = np.random.choice(indices_to_drop, num_rows_to_drop, replace=False)
     # Drop the selected rows from the DataFrame
     df_filtered = temp_train_df.drop(indices_to_drop)
-    instruction_ds["train"] = Dataset.from_pandas(df_filtered, preserve_index=False)
-    print(f"INFO: Train dataset size shrinked from {initial_size} rows to {len(instruction_ds['train'])}. {initial_size - len(instruction_ds['train'])} None values removed.")
+    instruction_train = Dataset.from_pandas(df_filtered, preserve_index=False)
+    print(f"INFO: Train dataset size shrinked from {initial_size} rows to {len(instruction_train)}. {initial_size - len(instruction_train)} None values removed.")
 
-    print(instruction_ds)
     print("\n\n")
     print("Example datapoint:\n")
-    print(instruction_ds["train"][0])
+    print(instruction_train[0])
 
-    instruction_ds["train"].to_json("./MultiWOZ_2.2_instruction/train.jsonl", orient="records", lines=True)
-    instruction_ds["validation"].to_json("./MultiWOZ_2.2_instruction/val.jsonl", orient="records", lines=True)
-    instruction_ds["test"].to_json("./MultiWOZ_2.2_instruction/test.jsonl", orient="records", lines=True)
+    instruction_validation_for_train = processed_ds["validation"].map(convert_to_instruction_following_prompts_train, batched=True, batch_size=100, remove_columns=processed_ds["validation"].column_names, num_proc=8)
+    instruction_validation_for_eval = processed_ds["validation"].map(convert_to_instruction_following_prompts_eval, batched=True, batch_size=100, remove_columns=processed_ds["validation"].column_names, num_proc=8)
+    instruction_test = processed_ds["test"].map(convert_to_instruction_following_prompts_eval, batched=True, batch_size=100, remove_columns=processed_ds["test"].column_names, num_proc=8)
+
+    print("\n\n")
+    print("Size of validation set for training:", len(instruction_validation_for_train))
+    print("Size of validation set for evaluation:", len(instruction_validation_for_eval))
+    print("Size of test set:", len(instruction_test))
+
+    instruction_train.to_json("./MultiWOZ_2.2_instruction/train.jsonl", orient="records", lines=True)
+    instruction_validation_for_train.to_json("./MultiWOZ_2.2_instruction/val.jsonl", orient="records", lines=True)
+    instruction_validation_for_eval.to_json("./MultiWOZ_2.2_instruction/eval.jsonl", orient="records", lines=True)
+    instruction_test.to_json("./MultiWOZ_2.2_instruction/test.jsonl", orient="records", lines=True)
 
     processed_ds["train"].to_json("./MultiWOZ_2.2_raw/train.jsonl", orient="records", lines=True)
     processed_ds["validation"].to_json("./MultiWOZ_2.2_raw/val.jsonl", orient="records", lines=True)

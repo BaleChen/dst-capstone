@@ -44,7 +44,7 @@ class DataArguments:
     eval_data_path: str = field(
         default=None, metadata={"help": "Path to the evaluation data."}
     )
-    lazy_preprocess: bool = True
+    lazy_preprocess: bool = False
     max_len: int = field(
         default=1024, metadata={"help": "Maximum length for each text to pad / truncate"}
     )
@@ -52,6 +52,12 @@ class DataArguments:
         default="\n\n### Response:\n", metadata={"help": "Indicator for the output"}
     )
     debug_mode: bool = False
+    train_pct: float = field(
+        default=1.0, metadata={"help": "Percentage of data to keep in train set."}
+    )
+    eval_pct: float = field(
+        default=1.0, metadata={"help": "Percentage of data to keep in train set."}
+    )
 
 def preprocess(
     samples,
@@ -61,20 +67,24 @@ def preprocess(
 ) -> Dict:
     """Preprocess the data."""
 
-    ins_res_list = [INSTRUCTION_TEMPLATE.format_map(
-        {
-            "instruction": samples["instruction"][i],
-            "input": samples["input"][i],
-            "output": samples["output"][i],
-        }
-    ) for i in range(len(samples["instruction"]))]
+    ins_res_list = []
+    
+    for i in range(len(samples["instruction"])):
+        ins = INSTRUCTION_TEMPLATE.format_map(
+            {
+                "instruction": samples["instruction"][i],
+                "input": samples["input"][i],
+                "output": samples["output"][i],
+            }
+        )
+        if len(tokenizer(ins)["input_ids"]) <= max_len:
+            ins_res_list.append(ins)
 
     input_ids = tokenizer(
         ins_res_list,
         return_tensors="pt",
         padding="max_length",
         max_length=max_len,
-        truncation=True
     ).input_ids
     targets = input_ids.clone()
     # Find the indicator ids in target and make the loss function ignore 
@@ -114,6 +124,7 @@ def preprocess(
         attention_mask=(input_ids != tokenizer.pad_token_id),
     )
 
+
 class SupervisedDataset(Dataset):
     """Dataset for supervised fine-tuning."""
 
@@ -122,7 +133,7 @@ class SupervisedDataset(Dataset):
 
         rank0_print("Formatting inputs...")
         data_dict = preprocess(raw_data, tokenizer, max_len, indicator_ids)
-        
+        warnings.warn(f"{len(raw_data['input']) - len(data_dict['input_ids'])} data points removed because they exceed max_len={max_len}.")
         self.input_ids = data_dict["input_ids"]
         self.labels = data_dict["labels"]
         self.attention_mask = data_dict["attention_mask"]
@@ -180,7 +191,6 @@ def make_supervised_data_module(
     # HACK: The first three tokens are [empty string, \n, \n]. 
     #       There is something wrong with the llama tokenizer 
     #       and this is a workaround.
-    # FIXME: For Falcon tokenizer, Xiaocheng might want to do something differently.
     output_indicator_ids = tokenizer.encode(data_args.indicator_ids, add_special_tokens=False)[3:] 
 
     rank0_print("Loading data...")
@@ -190,6 +200,13 @@ def make_supervised_data_module(
             "validation": os.path.join(data_args.eval_data_path, "val.jsonl"),
         }
     data = load_dataset("json", data_files=jsonl_files)
+
+    data["train"], data["validation"] = data["train"].shuffle(seed=42), data["validation"].shuffle(seed=42)
+    data["train"], data["validation"] = data["train"].select(range(int(len(data["train"]) * data_args.train_pct))), data["validation"].select(range(int(len(data["validation"]) * data_args.eval_pct)))
+
+    print("Number of training examples:", len(data["train"]))
+    print("Number of validation examples:", len(data["validation"]))
+    
     if data_args.debug_mode:
         data["train"], data["validation"] = data["train"].select(range(100)), data["validation"].select(range(50))
         
@@ -210,14 +227,15 @@ if __name__ == "__main__":
         "/scratch/bc3088/LF-research/llama/hf-models/llama-2-7b-chat",
         padding_side="right",
         use_fast=False,
+        add_eos_token=True,
     )
     tokenizer.pad_token = tokenizer.unk_token
 
     data_args = DataArguments(
         data_path="./data/MultiWOZ_2.2_instruction/",
         eval_data_path="./data/MultiWOZ_2.2_instruction/",
-        lazy_preprocess=True,
-        max_len=1024,
+        lazy_preprocess=False,
+        max_len=640,
         indicator_ids="\n\n### Response:\n",
     )
 

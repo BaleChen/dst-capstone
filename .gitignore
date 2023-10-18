@@ -6,3 +6,10 @@ data/MultiWOZ_2.2_instruction/
 data/MultiWOZ_2.2_raw/
 
 scripts/wandb_config.sh
+
+*/temp/
+log/
+temp/
+
+slurm/*
+*/debug_*

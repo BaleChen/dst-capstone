@@ -1,5 +1,3 @@
-# XXX NOTE: What is FSDP?
-
 # Usage: deepspeed train_lora.py --deepspeed <$PATH_TO_DEEPSPEED_CONFIG>
 
 # Adapted from tatsu-lab@stanford_alpaca. Below is the original copyright:
@@ -22,7 +20,10 @@ import logging
 import pathlib
 import typing
 import os
+
+# Bale Chen
 import pdb
+from time import gmtime, strftime
 
 from deepspeed import zero
 from deepspeed.runtime.zero.partition_parameters import ZeroParamStatus
@@ -38,6 +39,10 @@ from fastchat.train.train import (
 from dataset_utils import (
     DataArguments,
     make_supervised_data_module,
+) # Bale Chen
+
+from utils import (
+    prepare_exp_name,
 )
 
 from fastchat.train.llama_flash_attn_monkey_patch import (
@@ -56,6 +61,8 @@ class TrainingArguments(transformers.TrainingArguments):
         },
     ) # NOTE: not used
     flash_attn: bool = False
+    auto_detect_checkpoint: bool = True
+    checkpoint_dir: typing.Optional[str] = field(default=None)
 
 
 @dataclass
@@ -181,13 +188,23 @@ def train():
 
     if training_args.gradient_checkpointing:
         model.enable_input_require_grads()
+    
+    # Bale Chen
+    training_args.run_name = prepare_exp_name(
+        model_args=model_args,
+        training_args=training_args,
+        data_args=data_args,
+        lora_args=lora_args
+    )
+    training_args.output_dir = os.path.join(training_args.output_dir, training_args.run_name)
 
     tokenizer = transformers.AutoTokenizer.from_pretrained(
         model_args.model_name_or_path,
         cache_dir=training_args.cache_dir,
-        # model_max_length=training_args.model_max_length,
+        # model_max_length=training_args.model_max_length, # Bale Chen
         padding_side="right",
         use_fast=False,
+        add_eos_token=True, # Bale Chen
     )
     tokenizer.pad_token = tokenizer.unk_token
 
@@ -198,8 +215,10 @@ def train():
     )
 
     model.config.use_cache = False
-    if list(pathlib.Path(training_args.output_dir).glob("checkpoint-*")):
-        trainer.train(resume_from_checkpoint=True)
+    if training_args.auto_detect_checkpoint and list(pathlib.Path(training_args.output_dir).glob("checkpoint-*")):
+        trainer.train(resume_from_checkpoint=True) # Bale Chen: after setting output dir to time specific, this is no longer usable. Please provide checkpoint path manually.
+    elif training_args.checkpoint_dir:
+        trainer.train(resume_from_checkpoint=training_args.checkpoint_dir)
     else:
         trainer.train()
     trainer.save_state()
