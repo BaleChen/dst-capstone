@@ -10,6 +10,7 @@ scripts/wandb_config.sh
 */temp/
 log/
 temp/
+results
 
 slurm/*
 */debug_*

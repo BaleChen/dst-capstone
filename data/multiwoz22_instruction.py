@@ -50,8 +50,8 @@ def process_data(example):
 
 def convert_to_instruction_following_prompts_train(examples):
     
-    template_non_categorical = """Based on the input dialogue between the user and the assistant, answer \"{slot_desc}\". If it\'s not mentioned in the dialogue, please answer NONE. """
-    template_categorical = """Based on the input dialogue between the user and the assistant, choose the correct answer for \"{slot_desc}\" from {slot_space}. If it\'s not mentioned in the dialogue, please choose NONE. """
+    template_non_categorical = """Based on the input dialogue between the user and the assistant, pay attention to the user's utterances and answer \"{slot_desc}\". If it\'s not mentioned in the dialogue, please answer NONE. """
+    template_categorical = """Based on the input dialogue between the user and the assistant, pay attention to the user's utterances and choose the correct answer for \"{slot_desc}\" from {slot_space}. If it\'s not mentioned in the dialogue, please choose NONE. """
     instructions = []
     inputs = []
     outputs = []
@@ -123,21 +123,21 @@ if __name__ == "__main__":
     instruction_train = processed_ds["train"].map(convert_to_instruction_following_prompts_train, batched=True, batch_size=100, remove_columns=processed_ds["train"].column_names, num_proc=8)
 
     # NOTE I only know how to do this in pandas. Gotta move fast so I didn't bother using huggingface dataset
-    initial_size = len(instruction_train)
-    temp_train_df = instruction_train.to_pandas()
+    # initial_size = len(instruction_train)
+    # temp_train_df = instruction_train.to_pandas()
 
-    condition = (temp_train_df["output"] == "None")
-    # Percentage to drop is (pct_of_none - pct_of_not_none) = 2 * pct_of_none - 1
-    pct_to_drop = 2 * condition.sum() / len(temp_train_df) - 1
-    print("INFO: dropping {:.2f} of None values".format(pct_to_drop.item()))
-    num_rows_to_drop = int(initial_size * pct_to_drop)
-    indices_to_drop = temp_train_df.index[condition]
-    # Randomly select the indices to drop
-    indices_to_drop = np.random.choice(indices_to_drop, num_rows_to_drop, replace=False)
-    # Drop the selected rows from the DataFrame
-    df_filtered = temp_train_df.drop(indices_to_drop)
-    instruction_train = Dataset.from_pandas(df_filtered, preserve_index=False)
-    print(f"INFO: Train dataset size shrinked from {initial_size} rows to {len(instruction_train)}. {initial_size - len(instruction_train)} None values removed.")
+    # condition = (temp_train_df["output"] == "None")
+    # # Percentage to drop is (pct_of_none - pct_of_not_none) = 2 * pct_of_none - 1
+    # pct_to_drop = 2 * condition.sum() / len(temp_train_df) - 1
+    # print("INFO: dropping {:.2f} of None values".format(pct_to_drop.item()))
+    # num_rows_to_drop = int(initial_size * pct_to_drop)
+    # indices_to_drop = temp_train_df.index[condition]
+    # # Randomly select the indices to drop
+    # indices_to_drop = np.random.choice(indices_to_drop, num_rows_to_drop, replace=False)
+    # # Drop the selected rows from the DataFrame
+    # df_filtered = temp_train_df.drop(indices_to_drop)
+    # instruction_train = Dataset.from_pandas(df_filtered, preserve_index=False)
+    # print(f"INFO: Train dataset size shrinked from {initial_size} rows to {len(instruction_train)}. {initial_size - len(instruction_train)} None values removed.")
 
     print("\n\n")
     print("Example datapoint:\n")
@@ -148,6 +148,7 @@ if __name__ == "__main__":
     instruction_test = processed_ds["test"].map(convert_to_instruction_following_prompts_eval, batched=True, batch_size=100, remove_columns=processed_ds["test"].column_names, num_proc=8)
 
     print("\n\n")
+    print("Size of train set:", len(instruction_train))
     print("Size of validation set for training:", len(instruction_validation_for_train))
     print("Size of validation set for evaluation:", len(instruction_validation_for_eval))
     print("Size of test set:", len(instruction_test))
