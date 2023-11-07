@@ -34,7 +34,7 @@ torchrun --nproc_per_node $1 --nnode 1 src/fc_train_lora.py \
     --ddp_find_unused_parameters False \
     --train_pct 0.3 \
     --eval_pct 0.3 \
-    # --checkpoint_dir ./checkpoints/2023-10-07-17:03_llama-2-7b-chat_pdbs16_lr1e-05 \
+    # --checkpoint_dir checkpoint-7500 \
     # --debug_mode \
     # --max_steps 1000 \
     # --deepspeed ./../FastChat/playground/deepspeed_config_s2.json \

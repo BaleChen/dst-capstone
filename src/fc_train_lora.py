@@ -190,13 +190,14 @@ def train():
         model.enable_input_require_grads()
     
     # Bale Chen
-    training_args.run_name = prepare_exp_name(
-        model_args=model_args,
-        training_args=training_args,
-        data_args=data_args,
-        lora_args=lora_args
-    )
-    training_args.output_dir = os.path.join(training_args.output_dir, training_args.run_name)
+    if training_args.output_dir == "./checkpoints":
+        training_args.run_name = prepare_exp_name(
+            model_args=model_args,
+            training_args=training_args,
+            data_args=data_args,
+            lora_args=lora_args
+        )
+        training_args.output_dir = os.path.join(training_args.output_dir, training_args.run_name)
 
     tokenizer = transformers.AutoTokenizer.from_pretrained(
         model_args.model_name_or_path,

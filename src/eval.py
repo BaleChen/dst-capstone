@@ -238,6 +238,39 @@ class DSTEvaluator():
             )
 
         data = data.add_column("single_qa_generated_response", gen_results)
+        
+        return data
+    
+    def inference_single_qa_beam_upper_bound(self, data, output_dir="./temp/"):
+        gen_results = []
+        for i in tqdm(range(0, len(data), self.batch_size)):
+            if i + self.batch_size > len(data):
+                batch = data.select(range(i, len(data)))
+            else:
+                batch = data.select(range(i, i + self.batch_size))
+            
+            # Using dynamic padding
+            input_ids, attention_mask = self.tokenizer(batch["input"], padding=True, truncation=True, return_tensors="pt").values()
+            input_ids = input_ids.to(self.model.device)
+            attention_mask = attention_mask.to(self.model.device)
+
+            assert self.gen_config.num_beams == self.gen_config.num_return_sequences, "num_beams must be equal to num_return_sequences for beam search upper bound inference."
+
+            outputs = self.model.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                generation_config=self.gen_config,
+            )
+                
+            flattened_results = [
+                    out.split("### Response:\n")[1].strip() if len(out.split("### Response:\n")) == 2 else "".join(out.split("### Response:\n")[1:]).strip()
+                    for out in self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
+                ]
+
+            for i in range(0, len(flattened_results), self.gen_config.num_beams):
+                gen_results.append(flattened_results[i:i+self.gen_config.num_beams])
+
+        data = data.add_column("single_qa_beam_candidates", gen_results)
         return data
 
     def inference_multi_qa(self):
@@ -288,7 +321,7 @@ if __name__ == "__main__":
     gen_config = GenerationConfig(
         max_new_tokens=64, # a large enough value
         do_sample=False,
-        num_beam=args.num_beams,
+        num_beams=args.num_beams,
         pad_token_id=tokenizer.pad_token_id,
         eos_token_id=tokenizer.eos_token_id,
     )
