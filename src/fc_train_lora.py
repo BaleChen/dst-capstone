@@ -137,13 +137,12 @@ def train():
             logging.warning(
                 "FSDP and ZeRO3 are both currently incompatible with QLoRA."
             )
-
     compute_dtype = (
         torch.float16
         if training_args.fp16
         else (torch.bfloat16 if training_args.bf16 else torch.float32)
     )
-
+    
     model = transformers.AutoModelForCausalLM.from_pretrained(
         model_args.model_name_or_path,
         cache_dir=training_args.cache_dir,
@@ -165,7 +164,6 @@ def train():
         bias=lora_args.lora_bias,
         task_type="CAUSAL_LM",
     )
-
     if lora_args.q_lora:
         model = prepare_model_for_kbit_training(
             model, use_gradient_checkpointing=training_args.gradient_checkpointing
@@ -210,7 +208,6 @@ def train():
     tokenizer.pad_token = tokenizer.unk_token
 
     data_module = make_supervised_data_module(tokenizer=tokenizer, data_args=data_args)
-    
     trainer = Trainer(
         model=model, tokenizer=tokenizer, args=training_args, **data_module
     )

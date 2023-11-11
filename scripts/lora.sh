@@ -8,10 +8,10 @@ torchrun --nproc_per_node $1 --nnode 1 src/fc_train_lora.py \
     --data_path ./data/MultiWOZ_2.2_instruction/ \
     --eval_data_path ./data/MultiWOZ_2.2_instruction/ \
     --bf16 False \
-    --fp16 False \
+    --fp16 True \
     --tf32 False \
     --output_dir ./checkpoints \
-    --num_train_epochs 4 \
+    --num_train_epochs 2 \
     --per_device_train_batch_size 16 \
     --per_device_eval_batch_size 16 \
     --gradient_accumulation_steps 1 \
@@ -29,13 +29,13 @@ torchrun --nproc_per_node $1 --nnode 1 src/fc_train_lora.py \
     --lr_scheduler_type "cosine" \
     --model_max_length 2048 \
     --q_lora True \
-    --report_to wandb \
+    --report_to none \
     --gradient_checkpointing True \
     --ddp_find_unused_parameters False \
     --train_pct 0.3 \
-    --eval_pct 0.3 \
+    --eval_pct 0.3 
+    # --debug_mode
     # --checkpoint_dir checkpoint-7500 \
-    # --debug_mode \
     # --max_steps 1000 \
     # --deepspeed ./../FastChat/playground/deepspeed_config_s2.json \
 

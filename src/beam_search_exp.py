@@ -38,7 +38,7 @@ if __name__ == "__main__":
         model = base_model
 
     gen_config = GenerationConfig(
-        max_new_tokens=64, # a large enough value
+        max_new_tokens=32, # a large enough value
         do_sample=False,
         num_beams=args.num_beams,
         num_return_sequences=args.num_beams,
@@ -53,7 +53,9 @@ if __name__ == "__main__":
     )
     evaluator.prepare(model, tokenizer, gen_config=gen_config)
 
-    results = evaluator.inference_single_qa_beam_upper_bound(data=evaluator.eval_data).to_pandas()
+    results = evaluator.inference_single_qa_beam_upper_bound(
+        data=evaluator.eval_data.select(range(len(evaluator.eval_data)//2)),
+        ).to_pandas()
     
     def check_pred_correct(row):
         candidates = row["single_qa_beam_candidates"].tolist()
