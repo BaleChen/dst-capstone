@@ -13,3 +13,15 @@ def prepare_exp_name(
 
     # TODO specify the dataset format
     return exp_name    
+
+def first_difference_index(list1, list2):
+    # Find the minimum length of the two lists
+    min_length = min(len(list1), len(list2))
+
+    # Iterate through the lists up to the length of the shorter list
+    for i in range(min_length):
+        if list1[i] != list2[i]:
+            return i  # Return the index of the first differing element
+
+    # If lists are of the same length and no differences are found, return -1
+    return -1

@@ -24,3 +24,5 @@ hidden_states = torch.clamp(hidden_states, min=-clamp_value, max=clamp_value)
 The above codeblock would clamp the inf values in hidden_states to a very large number but does not overflow, which would patch up the numerical instabilities. 
 
 Note that this method is only a workaround as we don't have immediate access to Ampere GPUs that supports bf16 training. Llama-2 series are originally trained with bf16 precision that have the full range of float32, so it is more natural to use bf16 if you have a compatible GPU. Or, if you have time, fp32 training is always fine.
+
+Update: This phenomenon is only observed in Llama-2-7b. The 13b version works fine with fp16 precision.

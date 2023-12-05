@@ -49,11 +49,12 @@ def preprocess_prompt(examples, tokenizer, dataset_format="single_qa"):
     }
 
 class DSTEvaluator():
-    def __init__(self, eval_data_path=None, dataset_format="single_qa", batch_size=8, gen_config=None):
+    def __init__(self, eval_data_file_or_path=None, dataset_format="single_qa", batch_size=8, gen_config=None, eval_data_prefix="temp"):
         self.dataset_format = dataset_format
         self.batch_size = batch_size
-        self.eval_data_path = eval_data_path
+        self.eval_data_file_or_path = eval_data_file_or_path
         self.evaluation_ready = False
+        self.eval_data_prefix = eval_data_prefix
     
     def prepare(self, model, tokenizer, gen_config=None):
         self.model = model
@@ -79,12 +80,13 @@ class DSTEvaluator():
         else:
             self.gen_config = gen_config
 
-        if self.eval_data_path:
-            self.eval_data = self._load_and_process_data(self.eval_data_path)
-            self.eval_data_prefix = self.eval_data_path.split("/")[-1].split(".")[0]
+        if type(self.eval_data_file_or_path) == str:
+            self.eval_data = self._load_and_process_data(self.eval_data_file_or_path)
+            self.eval_data_prefix = self.eval_data_file_or_path.split("/")[-1].split(".")[0]
+        elif isinstance(self.eval_data_file_or_path, Dataset):
+            self.eval_data = self.eval_data_file_or_path
         else:
             self.eval_data = None
-            self.eval_data_prefix = "temp"
 
         self.evaluation_ready = True
 
@@ -100,7 +102,7 @@ class DSTEvaluator():
         if eval_data is None and self.eval_data is not None:
             eval_data = self.eval_data
         elif eval_data is None and self.eval_data is not None:
-            raise Exception("No eval data is provided. Please either specify eval_data_path when defining DSTEvaluator or provide eval_data in evaluate().")
+            raise Exception("No eval data is provided. Please either specify eval_data_file_or_path when defining DSTEvaluator or provide eval_data in evaluate().")
         elif eval_data and self.eval_data:
             warnings.warn(
                 f"eval_data is provided while the DSTEvaluator already have eval_data loaded. Using the eval_data provided in evaluate() function. Please check if the provided format is {self.dataset_format}"
@@ -166,9 +168,13 @@ class DSTEvaluator():
             }
         return results
     
-    def compute_metrics(self, results):
+    def compute_metrics(self, results, num_all_none_turns=None):
+        # NOTE: Add back the all none turns
+        if not num_all_none_turns:
+            num_all_none_turns = len(self.eval_data.to_pandas()["dialogue_turn_id"].uniques()) - len(results)
+
         # loop through all the dictionary items
-        total, turn_acc, joint_acc, F1_pred = 0, 0, 0, 0
+        total, joint_acc, F1_pred = 0, 0, 0
         precision, recall = 0, 0
         for dialogue_turn_id, result in results.items():
             pred_state, true_state = result["pred_state"], result["true_state"]
@@ -184,7 +190,7 @@ class DSTEvaluator():
         
         precision = precision / total
         recall = recall / total
-        joint_acc = joint_acc / total
+        joint_acc = (joint_acc + num_all_none_turns) / (total + num_all_none_turns)
         F1_score = F1_pred / total
         return {"joint_acc": joint_acc, "slot_f1": F1_score, "precision": precision, "recall": recall} # TODO also compute accuracy
     
@@ -276,8 +282,8 @@ class DSTEvaluator():
     def inference_multi_qa(self):
         raise NotImplementedError
     
-    def _load_and_process_data(self, eval_data_path):
-        eval_data = load_dataset("json", data_files={"eval": eval_data_path})["eval"]
+    def _load_and_process_data(self, eval_data_file_or_path):
+        eval_data = load_dataset("json", data_files={"eval": eval_data_file_or_path})["eval"]
         preprocess_prompt_partial = partial(preprocess_prompt, tokenizer=self.tokenizer, dataset_format=self.dataset_format)
         eval_data = eval_data.map(preprocess_prompt_partial, batched=True, batch_size=100, remove_columns=eval_data.column_names, num_proc=8)
         return eval_data
@@ -286,7 +292,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--adapter_path", type=str, default=None)
     parser.add_argument("--base_model_name", type=str, default="gpt2")
-    parser.add_argument("--eval_data_path", type=str, required=True)
+    parser.add_argument("--eval_data_file_or_path", type=str, required=True)
     parser.add_argument("--dataset_format", type=str, default="single_qa")
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--num_beams", type=int, default=1)
@@ -327,7 +333,7 @@ if __name__ == "__main__":
     )
 
     evaluator = DSTEvaluator(
-        eval_data_path=args.eval_data_path,
+        eval_data_file_or_path=args.eval_data_file_or_path,
         dataset_format=args.dataset_format,
         batch_size=args.batch_size,
     )

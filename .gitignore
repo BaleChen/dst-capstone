@@ -4,6 +4,8 @@ wandb/
 
 data/MultiWOZ_2.2_instruction/
 data/MultiWOZ_2.2_raw/
+data/beam
+data/MultiWOZ2.4
 
 scripts/wandb_config.sh
 
