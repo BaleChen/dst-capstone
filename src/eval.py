@@ -197,7 +197,7 @@ class DSTEvaluator():
     def compute_turn_acc_and_f1(self, pred_state, true_state):
         """Compute the turn-level accuracy, precision, recall, and F1 score."""
         # Compute the turn-level accuracy TODO: TRADE compute acc in a diff way
-        turn_correct, tp, fp, fn = 0, 0, 0, 0
+        turn_correct, tp, fp, fn, f = 0, 0, 0, 0, 0
         for slot, pred_value in pred_state.items():
             true_values = true_state[slot]
             if pred_value in true_values:
@@ -207,11 +207,13 @@ class DSTEvaluator():
                 fn += 1
             elif true_values == ["None"]:
                 fp += 1
+            else:
+                f += 1
         turn_precision = tp / (tp + fp) if tp + fp > 0 else 0
         turn_recall = tp / (tp + fn) if tp + fn > 0 else 0
         turn_f1 = 2 * turn_precision * turn_recall / (turn_precision + turn_recall) if turn_precision + turn_recall > 0 else 0
         
-        return turn_correct, turn_f1, (turn_precision, turn_recall), fp+fn == 0
+        return turn_correct, turn_f1, (turn_precision, turn_recall), fp+fn+f == 0
 
     def inference_single_qa(self, data, output_dir="./temp/"):
         # TODO support multi-gpu inference

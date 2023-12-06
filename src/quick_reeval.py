@@ -2,6 +2,75 @@ import json
 import pandas as pd
 import argparse
 from copy import deepcopy
+import os
+
+FUZZY_MAPPING = {
+    "swimming pool": "swimmingpool",
+    "concert hall": "concerthall",
+    "cafe uno": "caffe uno",
+    "cherry hinton water play": "cherry hinton water park",
+    "huntingdon marriott hotel": "huntingdon marriot hotel",
+    "el shaddia guest house": "el shaddai guest house",
+    "shanghi family restaurant": "shanghai family restaurant",
+    "gallery at twelve and high street": "gallery at 12 a high street",
+    "the gardina": "the gardenia",
+    "nandos city centre": "nandos",
+    "ashley hotel": "ashley house",
+    "antolia": "anatolia",
+    "anatoilia": "anatolia",
+    "the hotpot": "the hotspot",
+}
+
+def normalize(text):
+    if text in FUZZY_MAPPING:
+        text = FUZZY_MAPPING[text]
+    if len(text) > 0 and text[0] == "0":
+        text = text[1:]
+    if "&" in text:
+        text = text.replace("&", " and ")
+    if "'" in text:
+        text = text.replace("'", "")
+    if "-" in text:
+        text = text.replace("-", " ")
+    if "the " in text:
+        text = text.replace("the ", "")
+    if "s " in text:
+        text = text.replace("s ", " ")
+    if len(text) > 0 and text[-1] == "s":
+        text = text[:-1]
+    if text[-3:] == " pm":
+        if ":" in text:
+            hour = int(text.split(":")[0]) + 12
+            text = f"{hour}:{text.split(':')[1]}".replace(" pm", "")
+        else:
+            hour = int(text[:2].strip()) + 12
+            text = f"{hour}:00".replace(" pm", "")
+    if text[-3:] == " am":
+        text = text[:-3]
+    if "guest house" in text:
+        text = text.replace("guest house", "guesthouse")
+    if "b&b" in text or "b and b" in text:
+        text = text.replace("b&b", "bed and breakfast")
+        text = text.replace("b and b", "bed and breakfast")
+    text = text.replace("centre", "center")
+    text = text.replace("hotel", "")
+    text = text.replace("restaurant", "")
+    text = text.replace("college", "")
+    text = text.replace("guesthouse", "")
+    text = text.replace("cinema", "")
+    text = text.replace("museum", "")
+    text = text.replace("archaelogy", "archaeology")
+    text = text.replace("fenditton", "fen ditton")
+    if text[-3:] == ":00":
+        text = text[:-3]
+    text = text.strip()
+    return text
+
+def fuzzy_match(pred_value, true_values):
+    for true_value in true_values:
+        if normalize(pred_value) == normalize(true_value):
+            return True
+    return False
 
 def transform_test_data_to_single_dict(test_data):
     ret_test_data = {}
@@ -19,7 +88,6 @@ def compute_metrics(results, num_all_none_turns=0, num_new_fn_turns=0):
     for dialogue_turn_id, result in results.items():
         pred_state, true_state = result["pred_state"], result["true_state"]
         total += 1
-
         turn_correct, turn_f1, (turn_precision, turn_recall), jga_flag = compute_turn_acc_and_f1(pred_state, true_state)
 
         if jga_flag:
@@ -27,7 +95,7 @@ def compute_metrics(results, num_all_none_turns=0, num_new_fn_turns=0):
         F1_pred += turn_f1
         precision += turn_precision
         recall += turn_recall
-    
+
     precision = precision / (total + num_new_fn_turns)
     recall = recall / (total + num_new_fn_turns)
     joint_acc = (joint_acc + num_all_none_turns) / (total + num_all_none_turns) # NOTE: Add back the all none turns
@@ -36,21 +104,23 @@ def compute_metrics(results, num_all_none_turns=0, num_new_fn_turns=0):
 
 def compute_turn_acc_and_f1(pred_state, true_state):
     """Compute the turn-level accuracy, precision, recall, and F1 score."""
-    turn_correct, tp, fp, fn = 0, 0, 0, 0
+    turn_correct, tp, fp, fn, f = 0, 0, 0, 0, 0
     for slot, pred_value in pred_state.items():
         true_values = true_state[slot]
-        if pred_value in true_values:
+        if fuzzy_match(pred_value, true_values):
             turn_correct += 1
             tp += 1
-        elif pred_value == "None":
+        elif pred_value == "None" or pred_value == "NONE":
             fn += 1
-        elif true_values == ["None"]:
+        elif true_values == ["None"] or true_values == ["NONE"]:
             fp += 1
+        else:
+            f += 1
     turn_precision = tp / (tp + fp) if tp + fp > 0 else 0
     turn_recall = tp / (tp + fn) if tp + fn > 0 else 0
     turn_f1 = 2 * turn_precision * turn_recall / (turn_precision + turn_recall) if turn_precision + turn_recall > 0 else 0
     
-    return turn_correct, turn_f1, (turn_precision, turn_recall), fp+fn == 0
+    return turn_correct, turn_f1, (turn_precision, turn_recall), fp+fn+f == 0
 
 def main(args):
     with open(args.pred_file) as f:
@@ -83,6 +153,8 @@ def main(args):
             continue
         old_belief_state = values["true_state"]
         new_belief_state = new_test_data[dialogue_turn_id]['belief_state']
+        if old_belief_state == {}:
+            continue
         domain = list(values["true_state"].keys())[0].split("-")[0]
 
         for slot_value_list in new_belief_state:
@@ -113,16 +185,20 @@ def main(args):
             # ["something"] "None" -> update to ["None"]
             # ["something"] "something_else" -> update to ["something_else"]
             # ["something"] "something" -> update to ["something"]
+    
 
     metrics_24 = compute_metrics(new_preds, num_all_none_turns, modified_wrong_cnt)
     metrics_22 = compute_metrics(preds, num_all_none_turns)
     print(f"Metrics for MWZ_24: {metrics_24}")
     print(f"Metrics for MWZ_22: {metrics_22}")
+    with open(os.path.join("/".join(args.pred_file.split("/")[:-1]), f"{args.set_prefix}_new_results.json"), "w") as f:
+        json.dump(new_preds, f)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--pred_file', type=str, default=None, required=True)
     parser.add_argument('--new_test_data', type=str, default=None, required=True)
     parser.add_argument('--old_test_data', type=str, default=None, required=True)
+    parser.add_argument('--set_prefix', type=str, default="temp")
     args = parser.parse_args()
     main(args)
