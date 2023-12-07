@@ -7,18 +7,33 @@ import os
 FUZZY_MAPPING = {
     "swimming pool": "swimmingpool",
     "concert hall": "concerthall",
-    "cafe uno": "caffe uno",
+    "caffe uno": "cafe uno",
+    "caffee uno": "cafe uno",
     "cherry hinton water play": "cherry hinton water park",
     "huntingdon marriott hotel": "huntingdon marriot hotel",
-    "el shaddia guest house": "el shaddai guest house",
+    "huntingdon marriott": "huntingdon marriot",
+    "el shaddai guest house": "el shaddia guest house",
+    "el shaddai": "el shaddia",
     "shanghi family restaurant": "shanghai family restaurant",
     "gallery at twelve and high street": "gallery at 12 a high street",
     "the gardina": "the gardenia",
     "nandos city centre": "nandos",
-    "ashley hotel": "ashley house",
+    "ashley house": "ashley hotel",
     "antolia": "anatolia",
     "anatoilia": "anatolia",
     "the hotpot": "the hotspot",
+    "express by holiday inn cambridge": "express holiday inn by cambridge",
+    "saint johns chop shop house": "saint johns chop house",
+    "cambridge punte": "cambridge punter",
+    "saint catharines college": "saint catherines college",
+    "saint catharine's college": "saint catherines college",
+    "graffton hotel restaurant": "grafton hotel restaurant",
+    "ian hong house": "lan hong house",
+    "corsican": "corsica", 
+    "wandlbury country park": "wandlebury country park",
+    "loch fine": "loch fyne",
+    "flinches bed and breakfast": "finches bed and breakfast",
+    "the good luck chinese food takeaway": "good luck",
 }
 
 def normalize(text):
@@ -38,15 +53,21 @@ def normalize(text):
         text = text.replace("s ", " ")
     if len(text) > 0 and text[-1] == "s":
         text = text[:-1]
-    if text[-3:] == " pm":
+    
+    text = text.replace("p.m.", "pm")
+    text = text.replace("a.m.", "am")
+    if text[-2:] == "pm" and text[0].isdigit():
         if ":" in text:
             hour = int(text.split(":")[0]) + 12
-            text = f"{hour}:{text.split(':')[1]}".replace(" pm", "")
+            text = f"{hour}:{text.split(':')[1]}".replace("pm", "").strip()
         else:
-            hour = int(text[:2].strip()) + 12
-            text = f"{hour}:00".replace(" pm", "")
-    if text[-3:] == " am":
-        text = text[:-3]
+            try:
+                hour = int(text[:2].strip()) + 12
+            except:
+                hour = int(text[:1].strip()) + 12
+            text = f"{hour}:00".replace("pm", "")
+    if text[-2:] == "am" and text[0].isdigit():
+        text = text[:-2].strip()
     if "guest house" in text:
         text = text.replace("guest house", "guesthouse")
     if "b&b" in text or "b and b" in text:
@@ -54,11 +75,15 @@ def normalize(text):
         text = text.replace("b and b", "bed and breakfast")
     text = text.replace("centre", "center")
     text = text.replace("hotel", "")
+    text = text.replace("lodge", "")
     text = text.replace("restaurant", "")
     text = text.replace("college", "")
     text = text.replace("guesthouse", "")
     text = text.replace("cinema", "")
     text = text.replace("museum", "")
+    text = text.replace("gallery", "")
+    text = text.replace("theatre", "")
+    text = text.replace("nightclub", "")
     text = text.replace("archaelogy", "archaeology")
     text = text.replace("fenditton", "fen ditton")
     if text[-3:] == ":00":
@@ -191,6 +216,8 @@ def main(args):
     metrics_22 = compute_metrics(preds, num_all_none_turns)
     print(f"Metrics for MWZ_24: {metrics_24}")
     print(f"Metrics for MWZ_22: {metrics_22}")
+    print(f"{metrics_22['joint_acc']},{metrics_22['slot_f1']},{metrics_22['precision']},{metrics_22['recall']}", end=",")
+    print(f"{metrics_24['joint_acc']},{metrics_24['slot_f1']},{metrics_24['precision']},{metrics_24['recall']}")
     with open(os.path.join("/".join(args.pred_file.split("/")[:-1]), f"{args.set_prefix}_new_results.json"), "w") as f:
         json.dump(new_preds, f)
 

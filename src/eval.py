@@ -171,7 +171,7 @@ class DSTEvaluator():
     def compute_metrics(self, results, num_all_none_turns=None):
         # NOTE: Add back the all none turns
         if not num_all_none_turns:
-            num_all_none_turns = len(self.eval_data.to_pandas()["dialogue_turn_id"].uniques()) - len(results)
+            num_all_none_turns = len(self.eval_data.to_pandas()["dialogue_turn_id"].unique()) - len(results)
 
         # loop through all the dictionary items
         total, joint_acc, F1_pred = 0, 0, 0
