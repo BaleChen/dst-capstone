@@ -150,6 +150,21 @@ def compute_turn_acc_and_f1(pred_state, true_state):
 def main(args):
     with open(args.pred_file) as f:
         preds = json.load(f)
+    
+    # preprocessing of Xiaocheng's results
+    for dialogue_turn_id, values in preds.items():
+        true_state = values["true_state"]
+        pred_state = values["pred_state"]
+        cleaned_pred_state, cleaned_true_state = {}, {}
+        for slot, value in pred_state.items():
+            if true_state[slot][0] in ("None", "NONE") and value in ("None", "NONE"):
+                continue
+            else:
+                cleaned_pred_state[slot] = value
+                cleaned_true_state[slot] = true_state[slot]
+        preds[dialogue_turn_id]["pred_state"] = cleaned_pred_state
+        preds[dialogue_turn_id]["true_state"] = cleaned_true_state
+
     with open(args.new_test_data) as f:
         new_test_data = json.load(f)
         new_test_data = transform_test_data_to_single_dict(new_test_data)
