@@ -1,6 +1,9 @@
 # Dialogue State Tracking with Large Language Models
 
-This is an on-going capstone project by Bale Chen, Peiyang Wu, and Xiaocheng Yang, supervised by Prof. Wilson Tam at NYU Shanghai. More details will be added once the project is finished.
+This is the NYU Shanghai Undergraduate Computer Science and Data Science Capstone Research Project by Bale Chen, Peiyang Wu, and Xiaocheng Yang, supervised by Prof. Wilson Tam at NYU Shanghai. Our main contributions are:
+- We proved the feasibility of using LLMs for dialogue state tracking (DST) and achieved the new state of the art on the MultiWOZ 2.2 and 2.4 benchmarks.
+- We demonstrated that the slot-level question-answering formulation enhanced LLM’s performance on DST.
+- We clarified the influence of model scaling and data scaling on DST performance.
 
 ## A Note on FP16 Training with Llama-2
 
